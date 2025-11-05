@@ -1,2 +1,7 @@
 [workspace]
+resolver = "2"
 members = ["engineio", "socketio"]
+
+
+[workspace.dependencies]
+getrandom = "0.2.16"

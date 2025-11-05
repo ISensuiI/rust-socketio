@@ -102,24 +102,22 @@ pub use packet::{Packet, PacketId};
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use native_tls::TlsConnector;
     const CERT_PATH: &str = "../ci/cert/ca.crt";
-    use native_tls::Certificate;
     use std::fs::File;
     use std::io::Read;
+    use std::sync::Arc;
+    use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+    use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
+    use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 
-    pub(crate) fn tls_connector() -> error::Result<TlsConnector> {
-        let cert_path = std::env::var("CA_CERT_PATH").unwrap_or_else(|_| CERT_PATH.to_owned());
-        let mut cert_file = File::open(cert_path)?;
-        let mut buf = vec![];
-        cert_file.read_to_end(&mut buf)?;
-        let cert: Certificate = Certificate::from_pem(&buf[..]).unwrap();
-        Ok(TlsConnector::builder()
-            // ONLY USE FOR TESTING!
-            .danger_accept_invalid_hostnames(true)
-            .add_root_certificate(cert)
-            .build()
-            .unwrap())
+    pub(crate) fn tls_connector() -> error::Result<ClientConfig> {
+
+        Ok(
+            ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
+                .with_no_client_auth()
+        )
     }
     /// The `engine.io` server for testing runs on port 4201
     const SERVER_URL: &str = "http://localhost:4201";
@@ -144,4 +142,47 @@ pub(crate) mod test {
             .unwrap_or_else(|_| SERVER_URL_SECURE.to_owned());
         Ok(Url::parse(&url)?)
     }
+
+    #[derive(Debug)]
+    struct NoCertificateVerification;
+
+    impl ServerCertVerifier for NoCertificateVerification {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: UnixTime,
+        ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+            Ok(ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+            vec![
+                SignatureScheme::RSA_PKCS1_SHA256,
+                SignatureScheme::ECDSA_NISTP256_SHA256,
+                SignatureScheme::ED25519,
+            ]
+        }
+    }
+
 }

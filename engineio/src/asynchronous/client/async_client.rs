@@ -1,5 +1,5 @@
 use std::{fmt::Debug, pin::Pin};
-
+use std::time::SystemTime;
 use crate::{
     asynchronous::{async_socket::Socket as InnerSocket, generator::StreamGenerator},
     error::Result,
@@ -7,6 +7,9 @@ use crate::{
 };
 use async_stream::try_stream;
 use futures_util::{Stream, StreamExt};
+use rustls::{DigitallySignedStruct, Error as RustlsError, SignatureScheme};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 
 /// An engine.io client that allows interaction with the connected engine.io
 /// server. This client provides means for connecting, disconnecting and sending
@@ -90,12 +93,11 @@ impl Debug for Client {
 
 #[cfg(all(test))]
 mod test {
-
+    use std::sync::Arc;
     use super::*;
     use crate::{asynchronous::ClientBuilder, header::HeaderMap, packet::PacketId, Error};
     use bytes::Bytes;
     use futures_util::StreamExt;
-    use native_tls::TlsConnector;
     use url::Url;
 
     /// The purpose of this test is to check whether the Client is properly cloneable or not.
@@ -164,7 +166,7 @@ mod test {
     }
 
     use reqwest::header::HOST;
-
+    use rustls::ClientConfig;
     use crate::packet::Packet;
 
     fn builder(url: Url) -> ClientBuilder {
@@ -383,15 +385,60 @@ mod test {
         headers.insert(HOST, host);
 
         let _ = builder(url.clone())
-            .tls_config(
-                TlsConnector::builder()
-                    .danger_accept_invalid_certs(true)
-                    .build()
-                    .unwrap(),
-            )
+            .tls_config({
+                ClientConfig::builder()
+                    .dangerous()
+                    .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
+                    .with_no_client_auth()
+            })
             .build()
             .await?;
         let _ = builder(url).headers(headers).build().await?;
         Ok(())
+    }
+}
+#[derive(Debug)]
+struct NoCertificateVerification;
+
+impl ServerCertVerifier for NoCertificateVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> std::result::Result<ServerCertVerified, RustlsError> {
+        // 跳过所有证书验证 - 仅用于测试!
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, RustlsError> {
+        // 跳过签名验证 - 仅用于测试!
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, RustlsError> {
+        // 跳过签名验证 - 仅用于测试!
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        // 支持常见的签名方案
+        vec![
+            SignatureScheme::RSA_PKCS1_SHA256,
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            SignatureScheme::ED25519,
+        ]
     }
 }

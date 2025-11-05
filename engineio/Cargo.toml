@@ -16,20 +16,21 @@ all-features = true
 [dependencies]
 base64 = "0.22.1"
 bytes = "1"
-reqwest = { version = "0.12.4", features = ["blocking", "native-tls", "stream"] }
+reqwest = { version = "0.12.4", features = ["blocking", "rustls-tls", "stream"] }
 adler32 = "1.2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 http = "1.1.0"
-tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.21.0", features = ["rustls-tls-webpki-roots"] }
 tungstenite = "0.21.0"
 tokio = "1.40.0"
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 async-trait = "0.1.83"
 async-stream = "0.3.6"
 thiserror = "1.0"
-native-tls = "0.2.12"
+rustls = { version = "0.22.4" }
 url = "2.5.4"
+
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["async_tokio"] }
@@ -43,6 +44,7 @@ features = ["macros"]
 [[bench]]
 name = "engineio"
 harness = false
+
 
 # needs to be present in order to support the benchmark
 # ci job

@@ -9,7 +9,7 @@ use bytes::Bytes;
 use futures_util::Stream;
 use futures_util::StreamExt;
 use http::HeaderMap;
-use native_tls::TlsConnector;
+use rustls::ClientConfig;
 use tokio::sync::RwLock;
 use tokio_tungstenite::connect_async_tls_with_config;
 use tokio_tungstenite::Connector;
@@ -32,7 +32,7 @@ impl WebsocketSecureTransport {
     /// Tls connector and an URL.
     pub(crate) async fn new(
         base_url: Url,
-        tls_config: Option<TlsConnector>,
+        tls_config: Option<ClientConfig>,
         headers: Option<HeaderMap>,
     ) -> Result<Self> {
         let mut url = base_url;
@@ -45,6 +45,9 @@ impl WebsocketSecureTransport {
             req.headers_mut().extend(map);
         }
 
+
+
+
         // `disable_nagle` Sets the value of the TCP_NODELAY option on this socket.
         //
         // If set to `true`, this option disables the Nagle algorithm.
@@ -56,7 +59,7 @@ impl WebsocketSecureTransport {
             req,
             None,
             /*disable_nagle=*/ false,
-            tls_config.map(Connector::NativeTls),
+            tls_config.map(|config| Connector::Rustls(Arc::from(config))),
         )
         .await?;
 
